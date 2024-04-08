@@ -1,0 +1,11 @@
+/.idea
+/all_datasets.zip
+/caogao.ipynb
+/checkpoints
+/dataset
+/experiments.ipynb
+/results
+/result_long_term_forecast.txt
+/test_results
+/TimesNet_tutorial.ipynb
+/__pycache__
