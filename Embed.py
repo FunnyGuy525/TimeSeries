@@ -184,7 +184,73 @@ class PatchEmbedding(nn.Module):
 
         x = self.value_embedding(x) + self.position_embedding(x)
         return self.dropout(x), n_vars
-    
+
+
+class iT_PatchEmbedding(nn.Module):
+    def __init__(self, enc_in, patch_len, stride, padding, dropout):
+        super(iT_PatchEmbedding, self).__init__()
+
+        self.patch_len = patch_len
+        self.stride = stride
+        self.padding_patch_layer = nn.ReplicationPad1d((0, padding))
+
+        # self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
+
+        self.position_embedding = PositionalEmbedding(enc_in * patch_len)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+
+        
+        n_vars = x.shape[1]
+        x = self.padding_patch_layer(x)
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
+
+        B, C, N, P = x.shape
+        x = torch.reshape(x, (B, N, -1))
+
+        # print(x.shape)
+        x = x + self.position_embedding(x)
+
+        x = torch.reshape(x, (B, C, N, P))
+        # print('embedding后x维度：',x.shape)
+        return self.dropout(x), n_vars
+
+
+def FFT_for_Periods(x, k=1):
+    # [B, T, C]
+    xf = torch.fft.rfft(x, dim=1)
+
+    frequency_list = abs(xf).mean(0).mean(-1)
+    frequency_list[0] = 0
+    _, top_list = torch.topk(frequency_list, k)
+    top_list = top_list.detach().cpu().numpy()
+    period = x.shape[1] // top_list
+    return period, abs(xf).mean(-1)[:, top_list]
+
+class FFT_PatchEmbedding(nn.Module):
+    def __init__(self, d_model, patch_len, stride, padding, dropout):
+        super(FFT_PatchEmbedding, self).__init__()
+
+        self.stride = stride
+        self.padding_patch_layer = nn.ReplicationPad1d((0, padding))
+
+        self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
+
+        self.position_embedding = PositionalEmbedding(d_model)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        period, period_weight = FFT_for_Periods(x, k=self.k)
+        n_vars = x.shape[1]
+        x = self.padding_patch_layer(x)
+        x = x.unfold(dimension=-1, size=period, step=period)
+        x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))
+
+        x = self.value_embedding(x) + self.position_embedding(x)
+        return self.dropout(x), n_vars    
 
 class raw_PatchEmbedding(nn.Module):
     def __init__(self, patch_len, stride, padding, dropout):
@@ -199,7 +265,6 @@ class raw_PatchEmbedding(nn.Module):
         # self.position_embedding = PositionalEmbedding(patch_len)
 
         # self.dropout = nn.Dropout(dropout)
-
 
     def forward(self, x):
 
